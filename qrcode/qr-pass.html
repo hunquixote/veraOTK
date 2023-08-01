@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width" />
+        <title>Wizvera Passkeys</title>
+        <style>
+            #txlog {
+                width: 90%;
+                height: 400px;
+            }
+        </style>
+        <script src="https://svc.passkeys.kr/client/js/wizvera-passkeys.js"></script>
+        <script type="text/javascript">
+            window.URLSearchParams =
+                window.URLSearchParams ||
+                function (searchString) {
+                    var self = this;
+                    self.searchString = searchString;
+                    self.get = function (name) {
+                        var results = new RegExp('[\?&]' + name + '=([^&#]*)').exec(self.searchString);
+                        if (results == null) {
+                            return null;
+                        } else {
+                            return decodeURIComponent(results[1]) || 0;
+                        }
+                    };
+                };
+        </script>
+    </head>
+    <body>
+        <script type="text/javascript">
+            //var PasskeyServiceRoot = 'https://svc.neverdie.cloud:8443/webauthn/api/v1';
+            var PasskeyServiceRoot = 'https://svc.passkeys.kr/webauthn/api/v1';
+
+            //var PasskeyServiceRoot = 'https://192.168.0.165:8443/webauthn/api/v1';
+            var PasskeyClientId = '31baeff4-39a5-47a7-aaff-528efe9e94e3';
+            var PasskeyOrigin = window.location.hostname;
+
+            var passkeysClient = undefined;
+
+            function register() {
+                if (!passkeysClient) {
+                    alert('initialize first');
+                    return;
+                }
+
+                passkeysClient
+                    .register({})
+                    .then(function (result) {
+                        writeLog(JSON.stringify(result, null, 2));
+                        // result.callbackURL 호출
+                    })
+                    .catch(function (error) {
+                        errorHandler(error);
+                    });
+            }
+
+            function assertion() {
+                if (!passkeysClient) {
+                    alert('initialize first');
+                    return;
+                }
+
+                passkeysClient
+                    .assertion({})
+                    .then(function (result) {
+                        writeLog(JSON.stringify(result, null, 2));
+                        // result.callbackURL 호출
+                    })
+                    .catch(function (error) {
+                        errorHandler(error);
+                    });
+            }
+
+            function cancelQRToken() {
+                if (!passkeysClient) {
+                    alert('initialize first');
+                    return;
+                }
+
+                passkeysClient
+                    .cancelQRToken({})
+                    .then(function (res) {
+                        //writeLog(JSON.stringify(res, null, 2));
+                    })
+                    .catch(function (error) {
+                        errorHandler(error);
+                    });
+            }
+
+            function writeLog(msg) {
+                document.getElementById('txlog').textContent = msg;
+            }
+            function appendLog(msg, nl) {
+                document.getElementById('txlog').textContent += (nl ? '\n' : '') + msg;
+            }
+
+            function errorLog(error) {
+                console.error(error);
+                var message = error.name === 'ServiceError' ? '[' + error.code + '] ' + error.message : error.message;
+                writeLog('[' + error.name + ']' + message);
+            }
+
+            function errorHandler(error) {
+                errorLog(error);
+
+                var name = error.name;
+                var message = error.message;
+                var code = name === 'ServiceError' ? error.code : undefined;
+
+                var description = '';
+                if (name === 'NotSupportError') {
+                    description = '[' + name + '] Passkey가 지원되지 않는 브라우저입니다.\n\n' + message;
+                } else if (name === 'InvalidOptionsError') {
+                    description = '[' + name + '] 필수 파라미터 누락: \n\n' + message;
+                } else if (name === 'ServerError') {
+                    description = '[' + name + '] 서버에서 오류가 발생하였습니다: \n\n' + message;
+                } else if (name === 'GeneralPasskeyError') {
+                    description = '[' + name + '] Passkey API 오류: \n\n' + message;
+                } else if (name === 'AbortOperationError') {
+                    description = '[' + name + '] Passkey 인증이 취소되었습니다.: \n\n' + message;
+                } else if (name === 'ExcludedCredentialError') {
+                    description = '[' + name + '] 이미 서버에 등록된 Passkey입니다. : \n\n' + message;
+                } else if (name === 'ServiceError') {
+                    if (code === 1014) {
+                        description =
+                            '[' +
+                            name +
+                            '][' +
+                            code +
+                            '] 등록되지 않은 사용자입니다. email 인증을 해주세요. : \n\n' +
+                            message;
+                    } else if (code === 1005) {
+                        description =
+                            '[' +
+                            name +
+                            '][' +
+                            code +
+                            '] 등록되지 않은 사용자입니다. email로 인증코드가 전송되었습니다. : \n\n' +
+                            message;
+                    } else if (code === 1007) {
+                        description = '[' + name + '][' + code + '] 등록되지 않은 사용자입니다. : \n\n' + message;
+                    } else if (code === 1006) {
+                        description = '[' + name + '][' + code + '] 유효하지 않은 인증코드입니다. : \n\n' + message;
+                    } else {
+                        description = '[' + name + '][' + code + '] ' + message;
+                    }
+                } else {
+                    description = '[' + name + '] ' + message;
+                }
+
+                alert(description);
+            }
+
+            function getQRToken() {
+                return getParam('qrToken');
+            }
+
+            function getParam(name) {
+                var urlParams = new URLSearchParams(location.search);
+                return urlParams.get(name);
+            }
+
+            function retryQR() {
+                var type = getParam('type');
+
+                if (type === '1') register();
+                else if (type === '2') assertion();
+            }
+
+            window.addEventListener('DOMContentLoaded', function () {
+                var type = getParam('type');
+                var qrToken = getParam('qrToken');
+                var email = getParam('email');
+                var userHandle = getParam('userHandle');
+
+                try {
+                    // throws NotSupportError if not supported
+                    WizveraPasskeys.IsSupportPasskey();
+
+                    var options = {
+                        // 패스키 서버 API 서비스 주소
+                        passkeyServiceRoot: PasskeyServiceRoot,
+                        // 등록된 서비스 ID
+                        clientId: PasskeyClientId,
+                        // 패스키 지원 origin
+                        origin: PasskeyOrigin,
+
+                        email: email,
+                        qrToken: qrToken,
+                        userHandle: userHandle,
+                    };
+
+                    passkeysClient = new WizveraPasskeys(options);
+
+                    if (type === '1') register();
+                    else if (type === '2') assertion();
+                } catch (error) {
+                    errorHandler(error);
+                }
+            });
+        </script>
+        retry Passkey: <button onclick="retryQR()">retry Passkey</button><br />
+        cancel in progress QRToken: <button onclick="cancelQRToken()">cancel QRToken</button>
+        <hr />
+        <textarea id="txlog" readonly></textarea>
+    </body>
+</html>
